@@ -117,24 +117,27 @@ Set these Railway environment variables on the service:
 
 ```bash
 LINEAR_WEBHOOK_SECRET=...
-OPENCLAW_HOOK_URL=https://clawdbot-railway-template-production-ea0f.up.railway.app/hooks/linear
-OPENCLAW_HOOK_TOKEN=...
 LINEAR_ALLOWED_TEAM_KEYS=KIR
+EVENT_STORE_PATH=/data/linear-webhook-events/events.jsonl
+BRIDGE_READ_TOKEN=generate_a_random_token
 ```
 
 Once deployed, use the Railway service URL with:
 
 - `POST /linear-webhook`
 - `GET /health`
+- `GET /events?limit=20` (protected by `BRIDGE_READ_TOKEN` when set)
 
 Endpoints:
 - `POST /linear-webhook`
 - `GET /health`
+- `GET /events`
 
 Behavior:
 - verifies `linear-signature`
 - ignores events outside the allowed team list
-- forwards accepted payloads to your OpenClaw hook using bearer auth
+- stores normalized accepted events in a local JSONL queue
+- exposes recent events for a polling consumer like Hanna
 
 ## Roadmap
 

@@ -1,29 +1,39 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import http from 'node:http';
 
 const PORT = Number(process.env.PORT || 3000);
 const LINEAR_WEBHOOK_SECRET = process.env.LINEAR_WEBHOOK_SECRET;
-const OPENCLAW_HOOK_URL = process.env.OPENCLAW_HOOK_URL;
-const OPENCLAW_HOOK_TOKEN = process.env.OPENCLAW_HOOK_TOKEN;
 const ALLOWED_TEAM_KEYS = (process.env.LINEAR_ALLOWED_TEAM_KEYS || 'KIR')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean);
+const EVENT_STORE_PATH = process.env.EVENT_STORE_PATH || '/tmp/linear-webhook-events.jsonl';
+const BRIDGE_READ_TOKEN = process.env.BRIDGE_READ_TOKEN || '';
 
 if (!LINEAR_WEBHOOK_SECRET) {
   throw new Error('LINEAR_WEBHOOK_SECRET is required');
 }
-if (!OPENCLAW_HOOK_URL) {
-  throw new Error('OPENCLAW_HOOK_URL is required');
-}
-if (!OPENCLAW_HOOK_TOKEN) {
-  throw new Error('OPENCLAW_HOOK_TOKEN is required');
-}
+
+fs.mkdirSync(path.dirname(EVENT_STORE_PATH), { recursive: true });
 
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && req.url === '/health') {
       respondJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (req.method === 'GET' && req.url?.startsWith('/events')) {
+      if (!isReadAuthorized(req)) {
+        respondJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+
+      const limit = Math.max(1, Math.min(100, Number(new URL(req.url, 'http://localhost').searchParams.get('limit') || 20)));
+      const events = readRecentEvents(limit);
+      respondJson(res, 200, { ok: true, events });
       return;
     }
 
@@ -42,32 +52,15 @@ const server = http.createServer(async (req, res) => {
 
     const payload = JSON.parse(rawBody.toString('utf8'));
 
-    if (!shouldForward(payload)) {
-      respondJson(res, 200, { ok: true, forwarded: false, reason: 'ignored' });
+    if (!shouldStore(payload)) {
+      respondJson(res, 200, { ok: true, stored: false, reason: 'ignored' });
       return;
     }
 
-    const forwardResponse = await fetch(OPENCLAW_HOOK_URL, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${OPENCLAW_HOOK_TOKEN}`,
-      },
-      body: JSON.stringify(payload),
-    });
+    const event = normalizeEvent(payload);
+    fs.appendFileSync(EVENT_STORE_PATH, JSON.stringify(event) + '\n');
 
-    const responseText = await forwardResponse.text();
-
-    if (!forwardResponse.ok) {
-      respondJson(res, 502, {
-        error: 'openclaw_forward_failed',
-        status: forwardResponse.status,
-        body: responseText,
-      });
-      return;
-    }
-
-    respondJson(res, 200, { ok: true, forwarded: true });
+    respondJson(res, 200, { ok: true, stored: true, id: event.deliveryId });
   } catch (error) {
     respondJson(res, 500, {
       error: 'internal_error',
@@ -95,7 +88,7 @@ function verifyLinearSignature(rawBody, signatureHeader) {
   return expectedBuffer.length === providedBuffer.length && timingSafeEqual(expectedBuffer, providedBuffer);
 }
 
-function shouldForward(payload) {
+function shouldStore(payload) {
   const teamKey = payload?.data?.team?.key;
   const type = payload?.type;
   if (teamKey && !ALLOWED_TEAM_KEYS.includes(teamKey)) {
@@ -103,6 +96,50 @@ function shouldForward(payload) {
   }
 
   return ['Issue', 'Comment', 'Project', 'ProjectUpdate'].includes(type);
+}
+
+function normalizeEvent(payload) {
+  return {
+    deliveryId: payload.webhookId || payload.id || `${Date.now()}`,
+    webhookTimestamp: payload.webhookTimestamp || Date.now(),
+    type: payload.type || '',
+    action: payload.action || '',
+    url: payload.url || '',
+    organizationId: payload.organizationId || '',
+    title: payload?.data?.title || payload?.data?.body || '',
+    identifier: payload?.data?.identifier || '',
+    teamKey: payload?.data?.team?.key || '',
+    projectName: payload?.data?.project?.name || '',
+    stateName: payload?.data?.state?.name || '',
+    assigneeName: payload?.data?.assignee?.name || '',
+    payload,
+  };
+}
+
+function readRecentEvents(limit) {
+  if (!fs.existsSync(EVENT_STORE_PATH)) {
+    return [];
+  }
+
+  const lines = fs.readFileSync(EVENT_STORE_PATH, 'utf8')
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .slice(-limit);
+
+  return lines.map((line) => JSON.parse(line));
+}
+
+function isReadAuthorized(req) {
+  if (!BRIDGE_READ_TOKEN) {
+    return true;
+  }
+  const authHeader = req.headers.authorization;
+  if (authHeader === `Bearer ${BRIDGE_READ_TOKEN}`) {
+    return true;
+  }
+  const url = new URL(req.url, 'http://localhost');
+  return url.searchParams.get('token') === BRIDGE_READ_TOKEN;
 }
 
 function readRawBody(req) {
