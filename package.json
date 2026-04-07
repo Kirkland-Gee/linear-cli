@@ -1,0 +1,24 @@
+{
+  "name": "@kirkland-gee/linear-cli",
+  "version": "0.1.0",
+  "description": "A small public CLI for common Linear workflows.",
+  "type": "module",
+  "bin": {
+    "linear-cli": "./bin/linear-cli.js"
+  },
+  "scripts": {
+    "lint": "node --check bin/linear-cli.js && node --check src/*.js",
+    "test": "node --test",
+    "smoke:me": "node ./bin/linear-cli.js me --json",
+    "smoke:teams": "node ./bin/linear-cli.js teams --json",
+    "smoke:projects": "node ./bin/linear-cli.js projects list --json",
+    "prepare": "chmod +x ./bin/linear-cli.js"
+  },
+  "keywords": [
+    "linear",
+    "cli",
+    "productivity",
+    "graphql"
+  ],
+  "license": "MIT"
+}
