@@ -7,11 +7,12 @@
     "linear-cli": "./bin/linear-cli.js"
   },
   "scripts": {
-    "lint": "node --check bin/linear-cli.js && node --check src/*.js",
+    "lint": "node --check bin/linear-cli.js && node --check src/*.js && node --check bridge/*.js",
     "test": "node --test",
     "smoke:me": "node ./bin/linear-cli.js me --json",
     "smoke:teams": "node ./bin/linear-cli.js teams --json",
     "smoke:projects": "node ./bin/linear-cli.js projects list --json",
+    "bridge:dev": "node ./bridge/server.js",
     "prepare": "chmod +x ./bin/linear-cli.js"
   },
   "keywords": [

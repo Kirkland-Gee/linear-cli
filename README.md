@@ -15,6 +15,7 @@ It does **not** store tokens, ship secrets, or assume any Kirkland-specific conf
 - `linear-cli issues create`
 - `linear-cli issues update`
 - `linear-cli comments add`
+- optional webhook bridge for forwarding verified Linear webhooks into OpenClaw
 
 ## Install
 
@@ -87,6 +88,36 @@ This repo is intended to remain public-safe:
 - no webhook secrets committed
 - no hidden config files required
 
+## Webhook bridge
+
+This repo also includes a tiny webhook bridge at `bridge/server.js`.
+
+Use it when a provider like Linear signs payloads but cannot add the auth header your OpenClaw hook expects.
+
+### Environment
+
+```bash
+export LINEAR_WEBHOOK_SECRET=your_linear_signing_secret
+export OPENCLAW_HOOK_URL=https://your-gateway-host/hooks/linear
+export OPENCLAW_HOOK_TOKEN=your_openclaw_hook_token
+export LINEAR_ALLOWED_TEAM_KEYS=KIR
+```
+
+### Run locally
+
+```bash
+npm run bridge:dev
+```
+
+Endpoints:
+- `POST /linear-webhook`
+- `GET /health`
+
+Behavior:
+- verifies `linear-signature`
+- ignores events outside the allowed team list
+- forwards accepted payloads to your OpenClaw hook using bearer auth
+
 ## Roadmap
 
 Planned next additions:
@@ -94,7 +125,7 @@ Planned next additions:
 - state helpers (`states list`)
 - project/issue lookup by name or slug
 - assignment helpers
-- webhook receiver examples
+- richer webhook filtering/normalization
 - heartbeat-oriented commands (`my-work`, `blocked`, `backlog`)
 
 ## License
