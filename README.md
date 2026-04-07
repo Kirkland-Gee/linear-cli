@@ -109,6 +109,24 @@ export LINEAR_ALLOWED_TEAM_KEYS=KIR
 npm run bridge:dev
 ```
 
+### Railway
+
+This repo includes a minimal `railway.json` so Railway can run the webhook bridge without extra command setup.
+
+Set these Railway environment variables on the service:
+
+```bash
+LINEAR_WEBHOOK_SECRET=...
+OPENCLAW_HOOK_URL=https://clawdbot-railway-template-production-ea0f.up.railway.app/hooks/linear
+OPENCLAW_HOOK_TOKEN=...
+LINEAR_ALLOWED_TEAM_KEYS=KIR
+```
+
+Once deployed, use the Railway service URL with:
+
+- `POST /linear-webhook`
+- `GET /health`
+
 Endpoints:
 - `POST /linear-webhook`
 - `GET /health`
